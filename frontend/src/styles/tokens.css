@@ -1,0 +1,78 @@
+:root {
+  /* ---- Color: "locality" palette — navy + marigold, not the default cream/terracotta ---- */
+  --ink: #16233f;         /* deep navy — headings, dark sections */
+  --ink-soft: #2a3a5c;    /* lighter navy for panels on dark bg */
+  --marigold: #f2a93b;    /* primary accent — CTAs, highlights, pins */
+  --marigold-deep: #d98d1c;
+  --teal: #0e7c74;        /* verified / trust accent */
+  --paper: #f7f4ee;       /* warm-neutral page background */
+  --paper-raised: #ffffff;
+  --slate: #5c6478;       /* secondary text on light bg */
+  --slate-on-dark: #aab3cc;
+  --line: #e3ddcb;        /* hairline dividers on paper */
+  --line-on-dark: rgba(255, 255, 255, 0.14);
+
+  /* ---- Type ---- */
+  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* ---- Layout ---- */
+  --max-width: 1160px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --space-section: clamp(64px, 9vw, 112px);
+}
+
+.dashboard-content button,
+.dashboard-shell-action {
+  border: 0 !important;
+  outline: 0;
+  box-shadow: none !important;
+  background: transparent !important;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.dashboard-content button:hover,
+.dashboard-content button:focus-visible,
+.dashboard-content button:active,
+.dashboard-shell-action:hover,
+.dashboard-shell-action:focus-visible,
+.dashboard-shell-action:active {
+  border: 0 !important;
+  outline: 0;
+  background: linear-gradient(110deg, rgba(22, 35, 63, 0.08), rgba(242, 169, 59, 0.2)) !important;
+  color: var(--marigold) !important;
+}
+
+.dashboard-content button.text-white:hover,
+.dashboard-content button.text-white:focus-visible,
+.dashboard-content button.text-white:active {
+  color: var(--marigold) !important;
+}
+
+.dashboard-card {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: linear-gradient(110deg, rgba(22, 35, 63, 0.08), rgba(242, 169, 59, 0.2)) !important;
+  border-radius: var(--radius-sm);
+}
+
+.dashboard-content .dashboard-card,
+.dashboard-content .user-dashboard-menu,
+.dashboard-content .grid.gap-4 > button {
+  border: 0 !important;
+  background: linear-gradient(110deg, rgba(22, 35, 63, 0.08), rgba(242, 169, 59, 0.2)) !important;
+  border-radius: var(--radius-sm);
+}
+
+.dashboard-content nav[aria-label="User dashboard tabs"] > button.border-accent,
+.dashboard-content nav[aria-label="Owner dashboard tabs"] > button.border-accent,
+.dashboard-content nav[aria-label="Admin dashboard tabs"] > button.border-accent {
+  border: 0 !important;
+  background: linear-gradient(110deg, rgba(22, 35, 63, 0.08), rgba(242, 169, 59, 0.2)) !important;
+  border-radius: var(--radius-sm);
+  color: var(--marigold) !important;
+}

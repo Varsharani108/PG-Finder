@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Auth module only — the About/landing page keeps using tokens.css + about.css untouched. */
+.auth-shell {
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+.auth-shell h1,
+.auth-shell h2,
+.auth-shell h3 {
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
