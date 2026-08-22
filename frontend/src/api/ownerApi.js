@@ -9,3 +9,8 @@ export const updateInquiryStatus = async (id, status) => {
   const { data } = await axiosClient.patch(`/owner/inquiries/${id}/status`, { status });
   return data;
 };
+
+export const updateBookingStatus = async (id, status) => {
+  const { data } = await axiosClient.patch(`/owner/bookings/${id}/status`, { status });
+  return data;
+};

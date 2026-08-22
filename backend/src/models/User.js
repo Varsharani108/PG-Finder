@@ -34,6 +34,14 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "owner", "admin"],
       default: "user",
     },
+    verificationStatus: {
+      type: String,
+      enum: ["pending", "verified", "rejected"],
+      default: function defaultVerificationStatus() {
+        return this.role === "owner" ? "pending" : "verified";
+      },
+    },
+    rejectionReason: { type: String, trim: true, default: "" },
     isSuspended: { type: Boolean, default: false },
     ownerStatus: {
       type: String,
@@ -81,6 +89,8 @@ userSchema.methods.toSafeObject = function toSafeObject() {
     email: this.email,
     phone: this.phone,
     role: this.role,
+    verificationStatus: this.verificationStatus || (this.role === "owner" ? "pending" : "verified"),
+    rejectionReason: this.rejectionReason || "",
     isVerified: this.isVerified,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,

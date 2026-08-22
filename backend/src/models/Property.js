@@ -37,12 +37,20 @@ const propertySchema = new mongoose.Schema(
       maxlength: 1000,
       default: "",
     },
+    verificationStatus: {
+      type: String,
+      enum: ["pending", "verified", "rejected"],
+      default: "pending",
+    },
+    rejectionReason: { type: String, trim: true, maxlength: 500, default: "" },
     status: {
       type: String,
-      enum: ["Pending", "Active", "Rejected", "Suspended", "Draft"],
+      enum: ["Pending", "Pending Verification", "Active", "Rejected", "Suspended", "Draft"],
       default: "Pending",
     },
     moderationReason: { type: String, trim: true, maxlength: 500, default: "" },
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    verifiedAt: { type: Date },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
     occupancy: {

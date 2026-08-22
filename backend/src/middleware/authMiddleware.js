@@ -22,7 +22,7 @@ export async function protect(req, res, next) {
     }
 
     if (user.isSuspended) {
-      return res.status(403).json({ message: "This account has been suspended." });
+      return res.status(403).json({ message: "Your account has been suspended by the administrator." });
     }
 
     req.user = user;
@@ -43,4 +43,12 @@ export function authorize(...roles) {
     }
     next();
   };
+}
+
+export function requireVerifiedOwner(req, res, next) {
+  const isVerifiedOwner = req.user?.verificationStatus === "verified" || req.user?.ownerStatus === "Approved";
+  if (req.user?.role !== "owner" || !isVerifiedOwner || req.user.isSuspended) {
+    return res.status(403).json({ message: "A verified owner account is required for this action." });
+  }
+  next();
 }

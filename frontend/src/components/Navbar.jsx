@@ -120,10 +120,8 @@ export default function Navbar() {
   const navItems = [
     { label: "Home", action: () => navigate("/"), active: location.pathname === "/" && !isSectionActive },
     { label: "Find PG", action: goToSearch, active: isSearchActive },
-    { label: "Local Services", action: () => goToSection("offerings"), active: isSectionActive },
-    { label: "Tiffin", action: () => goToSection("offerings"), active: isSectionActive },
-    { label: "Explore Area", action: goToSearch, active: isSearchActive },
-    { label: "About", action: () => navigate("/"), active: false },
+    { label: "Services", action: () => goToSection("offerings"), active: isSectionActive },
+    
   ];
 
   return (

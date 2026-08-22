@@ -38,12 +38,15 @@ export async function signup(req, res) {
       });
     }
 
+    const normalizedRole = role || "user";
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase(),
       phone,
       password,
-      role: role || "user",
+      role: normalizedRole,
+      verificationStatus: normalizedRole === "owner" ? "pending" : "verified",
+      ownerStatus: normalizedRole === "owner" ? "Pending" : "Approved",
     });
 
     const token = generateToken(user);
@@ -78,6 +81,10 @@ export async function login(req, res) {
     const match = await user.comparePassword(password);
     if (!match) {
       return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    if (user.isSuspended) {
+      return res.status(403).json({ message: "Your account has been suspended by the administrator." });
     }
 
     const token = generateToken(user);

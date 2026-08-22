@@ -1,5 +1,10 @@
 import axiosClient from "./axiosClient.js";
 
+export const getPublicProperties = async () => {
+  const { data } = await axiosClient.get("/properties/public");
+  return data;
+};
+
 export const getOwnerProperties = async () => {
   const { data } = await axiosClient.get("/properties");
   return data;

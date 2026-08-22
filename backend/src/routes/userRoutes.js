@@ -8,14 +8,14 @@ import { createNotification } from "../utils/createNotification.js";
 const router = Router();
 router.use(protect, authorize("user"));
 
-const propertyFields = "name location rooms price description status moderationReason owner";
+const propertyFields = "name location rooms price description status verificationStatus moderationReason rejectionReason owner";
 
 router.get("/dashboard", async (req, res) => {
   try {
     const [user, inquiries, bookings] = await Promise.all([
       req.user.populate({ path: "savedProperties", select: propertyFields, populate: { path: "owner", select: "name email" } }),
       Inquiry.find({ tenant: req.user._id }).populate("property", propertyFields).sort({ createdAt: -1 }),
-      Booking.find({ tenant: req.user._id }).populate("property", propertyFields).sort({ createdAt: -1 }),
+      Booking.find({ tenant: req.user._id }).populate({ path: "property", select: propertyFields, populate: { path: "owner", select: "name email phone" } }).sort({ createdAt: -1 }),
     ]);
     const searches = [...(user.recentSearches || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     const notifications = [
@@ -37,7 +37,7 @@ router.get("/dashboard", async (req, res) => {
 });
 
 router.post("/saved-properties/:propertyId", async (req, res) => {
-  const property = await Property.findOne({ _id: req.params.propertyId, status: "Active" });
+  const property = await Property.findOne({ _id: req.params.propertyId, verificationStatus: "verified", status: "Active" });
   if (!property) return res.status(404).json({ message: "Active property not found" });
   await req.user.updateOne({ $addToSet: { savedProperties: property._id } });
   res.status(201).json({ message: "Property saved." });
@@ -56,7 +56,7 @@ router.post("/searches", async (req, res) => {
 
 router.post("/inquiries", async (req, res) => {
   const { property, message } = req.body;
-  const listing = await Property.findOne({ _id: property, status: "Active" });
+  const listing = await Property.findOne({ _id: property, verificationStatus: "verified", status: "Active" });
   if (!listing) return res.status(404).json({ message: "Active property not found" });
   if (!message?.trim()) return res.status(400).json({ message: "Inquiry message is required" });
   const inquiry = await Inquiry.create({ property, tenant: req.user._id, message: message.trim() });
@@ -65,11 +65,14 @@ router.post("/inquiries", async (req, res) => {
 });
 
 router.post("/bookings", async (req, res) => {
-  const { property, moveInDate, rent } = req.body;
-  const listing = await Property.findOne({ _id: property, status: "Active" });
+  const { property, moveInDate, rent, occupants = 1 } = req.body;
+  const listing = await Property.findOne({ _id: property, verificationStatus: "verified", status: "Active" });
   if (!listing) return res.status(404).json({ message: "Active property not found" });
-  const booking = await Booking.create({ property, tenant: req.user._id, moveInDate, rent });
+  const existing = await Booking.findOne({ property, tenant: req.user._id, status: { $in: ["Pending", "Confirmed", "Active"] } });
+  if (existing) return res.status(409).json({ message: "You already have an active booking request for this property." });
+  const booking = await Booking.create({ user: req.user._id, owner: listing.owner, property, tenant: req.user._id, moveInDate, rent, amount: Number(rent || 0), occupants, bookingDate: new Date(), status: "Pending" });
   await createNotification({ recipient: listing.owner, type: "booking", title: "New booking request", message: `${req.user.name} requested a booking for ${listing.name}.`, relatedId: booking._id });
+  await createNotification({ recipient: req.user._id, type: "booking", title: "Booking submitted", message: `Your booking request for ${listing.name} is pending review.`, relatedId: booking._id });
   res.status(201).json({ message: "Booking request submitted.", booking });
 });
 

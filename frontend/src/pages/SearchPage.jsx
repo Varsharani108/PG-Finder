@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SearchBar from "../components/search/SearchBar.jsx";
 import LocationSelector from "../components/search/LocationSelector.jsx";
 import BudgetFilter from "../components/search/BudgetFilter.jsx";
@@ -15,6 +15,7 @@ import "../styles/search.css";
 import Navbar from "../components/Navbar.jsx";
 import Footer from "../components/Footer.jsx";
 import { useRef } from "react";
+import { getPublicProperties } from "../api/propertyApi.js";
 
 const MOCK_PGS = [
   {
@@ -65,6 +66,9 @@ const MOCK_PGS = [
 ];
 
 export default function SearchPage() {
+  const [properties, setProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [budget, setBudget] = useState({ min: "", max: "" });
@@ -74,8 +78,26 @@ export default function SearchPage() {
   const [distance, setDistance] = useState(null);
   const [sort, setSort] = useState("recommended");
 
+  useEffect(() => {
+    getPublicProperties()
+      .then((items) => setProperties(items.map((property) => ({
+        ...property,
+        id: property._id,
+        city: property.location,
+        area: property.location,
+        rent: Number(String(property.price).replace(/[^0-9]/g, "")) || 0,
+        roomType: "shared",
+        facilities: [],
+        food: [],
+        distance: 0,
+        rating: 0,
+      }))))
+      .catch((error) => setLoadError(error.message))
+      .finally(() => setLoading(false));
+  }, []);
+
   const filtered = useMemo(() => {
-    let res = MOCK_PGS.slice();
+    let res = (properties.length ? properties : []).slice();
 
     if (query) {
       const q = query.toLowerCase();
@@ -118,7 +140,7 @@ export default function SearchPage() {
     if (sort === "highest_rating") res.sort((a, b) => b.rating - a.rating);
 
     return res;
-  }, [query, location, budget, roomTypes, facilities, food, distance, sort]);
+  }, [properties, query, location, budget, roomTypes, facilities, food, distance, sort]);
 
   const clearAll = () => {
     setQuery("");
@@ -173,6 +195,9 @@ export default function SearchPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {loading && <p className="text-sm text-slate">Loading verified PGs...</p>}
+                {loadError && <p className="text-sm text-red-600">{loadError}</p>}
+                {!loading && !loadError && !filtered.length && <p className="text-sm text-slate">No verified PGs match your filters.</p>}
                 {filtered.map((pg) => (
                   <PGCard key={pg.id} pg={pg} onShowOnMap={showOnMap} />
                 ))}

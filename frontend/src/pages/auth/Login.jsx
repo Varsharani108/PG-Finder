@@ -28,14 +28,16 @@ export default function Login() {
 
   const onSubmit = async (values) => {
     setSubmitError("");
+    toast.dismiss();
     try {
       const user = await login(values);
-      toast.success("Welcome back!");
+      toast.success("Welcome back!", { id: "login-success" });
       const redirectTo = location.state?.from?.pathname || ROLE_HOME[user.role] || "/";
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      setSubmitError(err.message);
-      toast.error(err.message);
+      const message = err.message || "Could not log in. Please try again.";
+      setSubmitError(message);
+      toast.error(message, { id: "login-error" });
     }
   };
 

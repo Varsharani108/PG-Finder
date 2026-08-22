@@ -20,7 +20,7 @@ router.get("/dashboard", async (req, res) => {
     const [properties, inquiries, bookings, reviews] = await Promise.all([
       Property.find({ owner: req.user._id }).sort({ createdAt: -1 }),
       Inquiry.find({ property: { $in: propertyIds } }).populate("property", "name").populate("tenant", "name email phone").sort({ createdAt: -1 }),
-      Booking.find({ property: { $in: propertyIds } }).populate("property", "name").populate("tenant", "name email phone").sort({ createdAt: -1 }),
+      Booking.find({ property: { $in: propertyIds } }).populate("property", "name location").populate("user", "name email phone").populate("tenant", "name email phone").sort({ createdAt: -1 }),
       Review.find({ property: { $in: propertyIds } }).populate("property", "name").populate("tenant", "name").sort({ createdAt: -1 }),
     ]);
 
@@ -69,6 +69,23 @@ router.patch("/inquiries/:id/status", async (req, res) => {
     res.json(inquiry);
   } catch (err) {
     res.status(400).json({ message: "Could not update inquiry status", error: err.message });
+  }
+});
+
+router.patch("/bookings/:id/status", async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["Confirmed", "Rejected", "Cancelled"].includes(status)) return res.status(400).json({ message: "Invalid booking status" });
+    const booking = await Booking.findOne({ _id: req.params.id, owner: req.user._id }).populate("property", "name").populate("user", "name").populate("tenant", "name");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    const allowed = { Pending: ["Confirmed", "Rejected", "Cancelled"], Confirmed: ["Cancelled"] };
+    if (!allowed[booking.status]?.includes(status)) return res.status(400).json({ message: `Cannot change booking from ${booking.status} to ${status}.` });
+    booking.status = status;
+    await booking.save();
+    await createNotification({ recipient: booking.user || booking.tenant, type: "booking", title: `Booking ${status.toLowerCase()}`, message: `Your booking for ${booking.property?.name || "this PG"} is now ${status.toLowerCase()}.`, relatedId: booking._id });
+    res.json({ message: "Booking status updated.", booking });
+  } catch (err) {
+    res.status(400).json({ message: "Could not update booking status", error: err.message });
   }
 });
 
