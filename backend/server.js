@@ -14,6 +14,7 @@ import adminRoutes from "./src/routes/adminRoutes.js";
 import reportRoutes from "./src/routes/reportRoutes.js";
 import userRoutes from "./src/routes/userRoutes.js";
 import notificationRoutes from "./src/routes/notificationRoutes.js";
+import reviewRoutes from "./src/routes/reviewRoutes.js";
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Not found" });

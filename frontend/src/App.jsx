@@ -5,10 +5,11 @@ import Signup from "./pages/auth/Signup.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import ResetPassword from "./pages/auth/ResetPassword.jsx";
 import PrivateRoute from "./components/auth/PrivateRoute.jsx";
-import UserDashboard from "./pages/dashboard/UserDashboard.jsx";
-import OwnerDashboard from "./pages/dashboard/OwnerDashboard.jsx";
+import UserDashboard from "./pages/dashboard/UserDashboardImproved.jsx";
+import OwnerDashboard from "./pages/dashboard/OwnerDashboardImproved.jsx";
 import AdminDashboard from "./pages/dashboard/AdminDashboard.jsx";
 import SearchPage from "./pages/SearchPage.jsx";
+import PropertyDetailsPage from "./pages/PropertyDetailsPage.jsx";
 
 export default function App() {
   return (
@@ -41,12 +42,9 @@ export default function App() {
       />
       <Route
         path="/search"
-        element={
-          <PrivateRoute>
-            <SearchPage />
-          </PrivateRoute>
-        }
+        element={<SearchPage />}
       />
+      <Route path="/property/:id" element={<PropertyDetailsPage />} />
       <Route
         path="/admin/dashboard"
         element={

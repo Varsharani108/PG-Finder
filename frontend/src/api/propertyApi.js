@@ -1,7 +1,26 @@
 import axiosClient from "./axiosClient.js";
 
-export const getPublicProperties = async () => {
-  const { data } = await axiosClient.get("/properties/public");
+export const getPublicProperties = async (filters = {}) => {
+  const { data } = await axiosClient.get("/properties/public", {
+    params: {
+      search: filters.search || undefined,
+      minPrice: filters.minPrice || undefined,
+      maxPrice: filters.maxPrice || undefined,
+      roomType: filters.roomType || undefined,
+      facilities: filters.facilities?.length ? filters.facilities : undefined,
+      food: filters.food?.length ? filters.food : undefined,
+      foodIncluded: filters.foodIncluded || undefined,
+      distance: filters.distance || undefined,
+      sort: filters.sort || undefined,
+      page: filters.page || undefined,
+      limit: filters.limit || undefined,
+    },
+  });
+  return data;
+};
+
+export const getPublicProperty = async (id) => {
+  const { data } = await axiosClient.get(`/properties/public/${encodeURIComponent(id)}`);
   return data;
 };
 

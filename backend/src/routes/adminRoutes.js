@@ -8,6 +8,7 @@ import Report from "../models/Report.js";
 import Booking from "../models/Booking.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
 import { createNotification } from "../utils/createNotification.js";
+import { refreshPropertyRating } from "../utils/reviewAggregates.js";
 
 const router = Router();
 router.use(protect, authorize("admin"));
@@ -32,10 +33,10 @@ router.get("/dashboard", async (req, res) => {
         totalUsers: users.filter((user) => user.role === "user").length,
         totalOwners: users.filter((user) => user.role === "owner").length,
         totalPGs: properties.length,
-        activeListings: properties.filter((property) => property.status === "Active").length,
-        pendingListings: properties.filter((property) => property.verificationStatus === "pending" || property.status === "Pending").length,
+        activeListings: properties.filter((property) => property.verificationStatus === "verified" && property.status === "active").length,
+        pendingListings: properties.filter((property) => property.verificationStatus === "pending").length,
         pendingOwnerVerifications: users.filter((user) => user.role === "owner" && (user.verificationStatus === "pending" || user.ownerStatus === "Pending")).length,
-        inquiries: inquiries.length + contacts.length,
+        inquiries: inquiries.length,
         reports: reports.filter((report) => report.status === "open").length,
         totalBookings: bookings.length,
       },
@@ -73,9 +74,11 @@ router.patch("/owners/:id/status", async (req, res) => {
 
 router.patch("/properties/:id/review", async (req, res) => {
   const { status, reason = "" } = req.body;
-  const verificationStatus = { Active: "verified", Rejected: "rejected", Pending: "pending" }[status] || status;
+  const verificationStatus = { Active: "verified", Rejected: "rejected", Pending: "pending", active: "verified", rejected: "rejected", pending: "pending", verified: "verified" }[status] || status;
   if (!["verified", "rejected", "pending"].includes(verificationStatus)) return res.status(400).json({ message: "Invalid listing decision" });
-  const property = await Property.findByIdAndUpdate(req.params.id, { verificationStatus, rejectionReason: reason, status: verificationStatus === "verified" ? "Active" : verificationStatus === "rejected" ? "Rejected" : "Pending", moderationReason: reason, reviewedBy: req.user._id, reviewedAt: new Date(), verifiedBy: verificationStatus === "verified" ? req.user._id : undefined, verifiedAt: verificationStatus === "verified" ? new Date() : undefined }, { new: true, runValidators: true }).populate(propertyPopulate);
+  if (verificationStatus === "rejected" && !reason.trim()) return res.status(400).json({ message: "A rejection reason is required." });
+  const reviewDate = new Date();
+  const property = await Property.findByIdAndUpdate(req.params.id, { verificationStatus, rejectionReason: verificationStatus === "rejected" ? reason.trim() : "", status: verificationStatus === "verified" ? "active" : "inactive", moderationReason: verificationStatus === "rejected" ? reason.trim() : "", reviewedBy: req.user._id, reviewedAt: reviewDate, verifiedBy: verificationStatus === "verified" ? req.user._id : undefined, verifiedAt: verificationStatus === "verified" ? reviewDate : undefined }, { new: true, runValidators: true }).populate(propertyPopulate);
   if (!property) return res.status(404).json({ message: "Property not found" });
   await createNotification({ recipient: property.owner?._id, type: "property", title: `Listing ${verificationStatus}`, message: `${property.name} was ${verificationStatus}${reason ? `: ${reason}` : "."}`, relatedId: property._id });
   res.json({ message: `Listing ${verificationStatus}.`, property });
@@ -94,14 +97,34 @@ router.delete("/properties/:id", async (req, res) => {
 });
 
 router.patch("/reports/:id/resolve", async (req, res) => {
-  const report = await Report.findByIdAndUpdate(req.params.id, { status: "resolved", resolution: req.body.resolution || "Resolved by admin", resolvedBy: req.user._id, resolvedAt: new Date() }, { new: true, runValidators: true });
+  const status = req.body.status || "resolved";
+  if (!["under_review", "resolved", "rejected"].includes(status)) return res.status(400).json({ message: "Invalid report status" });
+  const reviewDate = new Date();
+  const report = await Report.findByIdAndUpdate(req.params.id, { status, resolution: req.body.resolution || "", reviewedBy: req.user._id, reviewedAt: reviewDate, resolvedBy: status === "resolved" ? req.user._id : undefined, resolvedAt: status === "resolved" ? reviewDate : undefined }, { new: true, runValidators: true });
   if (!report) return res.status(404).json({ message: "Report not found" });
-  res.json({ message: "Report resolved.", report });
+  res.json({ message: `Report ${status.replace("_", " ")}.`, report });
+});
+
+router.patch("/inquiries/:id/status", async (req, res) => {
+  const { status, reply = "" } = req.body;
+  if (!["New", "Viewed", "Replied", "Closed"].includes(status)) return res.status(400).json({ message: "Invalid inquiry status" });
+  if (status === "Replied" && !reply.trim()) return res.status(400).json({ message: "A reply is required." });
+  const update = { status };
+  if (reply.trim()) {
+    update.adminReply = reply.trim();
+    update.repliedBy = req.user._id;
+    update.repliedAt = new Date();
+  }
+  const inquiry = await Inquiry.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).populate("property", "name").populate("tenant", "name email");
+  if (!inquiry) return res.status(404).json({ message: "Inquiry not found" });
+  if (reply.trim()) await createNotification({ recipient: inquiry.tenant?._id, type: "inquiry", title: "Admin replied to your inquiry", message: `${inquiry.property?.name || "Your inquiry"}: ${reply.trim()}`, relatedId: inquiry._id });
+  res.json({ message: "Inquiry updated.", inquiry });
 });
 
 router.delete("/reviews/:id", async (req, res) => {
   const review = await Review.findByIdAndDelete(req.params.id);
   if (!review) return res.status(404).json({ message: "Review not found" });
+  await refreshPropertyRating(review.property);
   res.json({ message: "Review removed." });
 });
 

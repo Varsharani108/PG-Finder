@@ -1,21 +1,20 @@
-export default function ActiveFilters({ filters }) {
+export default function ActiveFilters({ filters, onRemove }) {
   const parts = [];
-  if (filters.budget.min || filters.budget.max) {
-    parts.push(`₹${filters.budget.min || "0"}–₹${filters.budget.max || "∞"}`);
-  }
-  if (filters.roomTypes.length) parts.push(...filters.roomTypes);
-  if (filters.facilities.length) parts.push(...filters.facilities.slice(0,3));
-  if (filters.food.length) parts.push(...filters.food.slice(0,2));
-  if (filters.distance) parts.push(`Within ${filters.distance} m`);
+  if (filters.search) parts.push({ label: filters.search, key: "search" });
+  if (filters.budget.min || filters.budget.max) parts.push({ label: `₹${filters.budget.min || "0"}–₹${filters.budget.max || "∞"}`, key: "budget" });
+  parts.push(...filters.roomTypes.map((value) => ({ label: `${value} sharing`, key: `roomType:${value}` })));
+  parts.push(...filters.facilities.map((value) => ({ label: value, key: `facility:${value}` })));
+  parts.push(...filters.food.map((value) => ({ label: value, key: `food:${value}` })));
+  if (filters.distance) parts.push({ label: `Within ${filters.distance} m`, key: "distance" });
 
   if (!parts.length) return <div className="text-sm muted">No active filters</div>;
 
   return (
     <div className="flex flex-wrap gap-2">
-      {parts.map((p, i) => (
-        <div key={i} className="filter-badge">
-          {p} ×
-        </div>
+      {parts.map((part) => (
+        <button key={part.key} type="button" onClick={() => onRemove?.(part.key)} className="filter-badge">
+          {part.label} ×
+        </button>
       ))}
     </div>
   );

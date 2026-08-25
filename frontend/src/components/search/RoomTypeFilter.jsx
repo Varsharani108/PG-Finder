@@ -7,8 +7,7 @@ const OPTIONS = [
 
 export default function RoomTypeFilter({ value, onChange }) {
   const toggle = (id) => {
-    if (value.includes(id)) onChange(value.filter((v) => v !== id));
-    else onChange([...value, id]);
+    onChange(value.includes(id) ? [] : [id]);
   };
 
   return (
@@ -18,7 +17,7 @@ export default function RoomTypeFilter({ value, onChange }) {
         {OPTIONS.map((o) => (
           <label key={o.id} className="flex items-center gap-2">
             <input
-              type="checkbox"
+              type="radio"
               checked={value.includes(o.id)}
               onChange={() => toggle(o.id)}
             />
