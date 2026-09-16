@@ -35,7 +35,7 @@ export default function PGCard({ pg, onShowOnMap }) {
             ))}
           </div>
 
-          <div className="text-slate text-sm">Food: {pg.food.length ? pg.food.join(", ") : "Food information unavailable"}</div>
+          <div className="text-slate text-sm">Food: {Array.isArray(pg.food) && pg.food.length ? pg.food.join(", ") : "Food information unavailable"}</div>
           <div className="text-slate text-sm">Distance: {distanceLabel}</div>
           {pg.reviewCount !== null && <div className="text-slate text-sm">{pg.reviewCount} review{pg.reviewCount === 1 ? "" : "s"}</div>}
           {typeof pg.availableRooms === "number" && typeof pg.totalRooms === "number" && pg.totalRooms > 0 && <div className="text-slate text-sm">{pg.availableRooms} of {pg.totalRooms} rooms available</div>}

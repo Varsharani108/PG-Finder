@@ -4,6 +4,7 @@ import Inquiry from "../models/Inquiry.js";
 import Property from "../models/Property.js";
 import Review from "../models/Review.js";
 import Notification from "../models/Notification.js";
+import User from "../models/User.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
 import { createNotification } from "../utils/createNotification.js";
 
@@ -89,17 +90,117 @@ router.patch("/bookings/:id/status", async (req, res) => {
     const allowed = { Pending: ["Confirmed", "Rejected", "Cancelled"], Confirmed: ["Cancelled"] };
     if (!allowed[booking.status]?.includes(status)) return res.status(400).json({ message: `Cannot change booking from ${booking.status} to ${status}.` });
     const tracksAvailability = booking.property?.totalRooms > 0;
-    if (status === "Confirmed" && tracksAvailability) {
+    if (status === "Confirmed" && tracksAvailability && !booking.availabilityReserved) {
       const reserved = await Property.findOneAndUpdate({ _id: booking.property._id, availableRooms: { $gte: 1 } }, { $inc: { availableRooms: -1 } }, { new: true });
       if (!reserved) return res.status(409).json({ message: "No rooms are currently available." });
     }
     booking.status = status;
     await booking.save();
-    if (status === "Cancelled" && previousStatus === "Confirmed" && tracksAvailability) await Property.findByIdAndUpdate(booking.property._id, { $inc: { availableRooms: 1 } });
+    if (["Cancelled", "Rejected"].includes(status) && tracksAvailability && booking.availabilityReserved) {
+      await Property.findByIdAndUpdate(booking.property._id, { $inc: { availableRooms: 1 } });
+      booking.availabilityReserved = false;
+      await booking.save();
+    }
     await createNotification({ recipient: booking.user || booking.tenant, type: "booking", title: `Booking ${status.toLowerCase()}`, message: `Your booking for ${booking.property?.name || "this PG"} is now ${status.toLowerCase()}.`, relatedId: booking._id });
     res.json({ message: "Booking status updated.", booking });
   } catch (err) {
     res.status(400).json({ message: "Could not update booking status", error: err.message });
+  }
+});
+
+router.get("/profile", async (req, res) => {
+  try {
+    const propertyIds = await ownedPropertyIds(req.user._id);
+    const [properties, bookings, reviews, inquiries] = await Promise.all([
+      Property.find({ owner: req.user._id }),
+      Booking.find({ property: { $in: propertyIds } }),
+      Review.find({ property: { $in: propertyIds } }),
+      Inquiry.find({ property: { $in: propertyIds } }),
+    ]);
+
+    const stats = {
+      totalProperties: properties.length,
+      activeListings: properties.filter((p) => p.verificationStatus === "verified" && p.status === "active").length,
+      totalBookings: bookings.length,
+      activeBookings: bookings.filter((b) => ["Confirmed", "Active"].includes(b.status)).length,
+      totalReviews: reviews.length,
+      averageRating: reviews.length ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : 0,
+      totalInquiries: inquiries.length,
+      newInquiries: inquiries.filter((i) => i.status === "New").length,
+    };
+
+    res.json({
+      user: req.user.toSafeObject(),
+      stats,
+    });
+  } catch (err) {
+    console.error("[owner:profile] failed", err.message);
+    res.status(500).json({ message: "Could not load owner profile" });
+  }
+});
+
+router.patch("/profile", async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+    
+    if (!name || name.trim().length < 2) {
+      return res.status(400).json({ message: "Name must be at least 2 characters." });
+    }
+    
+    if (!phone || !/^[0-9]{10}$/.test(phone)) {
+      return res.status(400).json({ message: "Enter a valid 10-digit phone number." });
+    }
+
+    req.user.name = name.trim();
+    req.user.phone = phone;
+    await req.user.save();
+
+    res.json({ 
+      message: "Profile updated successfully.",
+      user: req.user.toSafeObject(),
+    });
+  } catch (err) {
+    res.status(400).json({ message: "Could not update profile", error: err.message });
+  }
+});
+
+router.patch("/change-password", async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: "All password fields are required." });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: "New password must be at least 8 characters." });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "New passwords do not match." });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ message: "New password must be different from current password." });
+    }
+
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const isPasswordCorrect = await user.comparePassword(currentPassword);
+    if (!isPasswordCorrect) {
+      return res.status(401).json({ message: "Current password is incorrect." });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ message: "Password changed successfully." });
+  } catch (err) {
+    console.error("[owner:change-password] failed", err.message);
+    res.status(500).json({ message: "Could not change password", error: err.message });
   }
 });
 

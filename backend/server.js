@@ -15,6 +15,7 @@ import reportRoutes from "./src/routes/reportRoutes.js";
 import userRoutes from "./src/routes/userRoutes.js";
 import notificationRoutes from "./src/routes/notificationRoutes.js";
 import reviewRoutes from "./src/routes/reviewRoutes.js";
+import bookingRoutes, { handleStripeWebhook } from "./src/routes/bookingRoutes.js";
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use(
     origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
   })
 );
+app.post("/api/bookings/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
 app.use(express.json());
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
@@ -39,6 +41,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/bookings", bookingRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Not found" });

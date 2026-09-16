@@ -22,6 +22,48 @@ function formatRent(property) {
   return property.price || "Rent unavailable";
 }
 
+function normalizeFacilityList(property) {
+  const facilities = Array.isArray(property?.facilities) ? property.facilities : [];
+  return facilities
+    .filter((facility) => facility && (facility.enabled || facility.includedInRent || facility.price > 0 || typeof facility === "string"))
+    .map((facility) => {
+      if (typeof facility === "string") return { name: facility, enabled: true, includedInRent: false, price: 0 };
+      return {
+        name: facility.name,
+        enabled: Boolean(facility.enabled),
+        includedInRent: Boolean(facility.includedInRent),
+        price: Number(facility.price) || 0,
+      };
+    })
+    .filter((facility) => facility.enabled || facility.includedInRent);
+}
+
+function normalizeFoodDetails(property) {
+  const source = property?.food && typeof property.food === "object" ? property.food : {};
+  const meals = ["breakfast", "lunch", "dinner"];
+  return meals
+    .filter((meal) => source[meal]?.enabled || source[meal]?.includedInRent)
+    .map((meal) => ({
+      name: meal,
+      enabled: Boolean(source[meal]?.enabled),
+      includedInRent: Boolean(source[meal]?.includedInRent),
+      price: Number(source[meal]?.price) || 0,
+    }));
+}
+
+function calculatePropertyTotal(property) {
+  const baseRent = Number(property?.monthlyRent) || 0;
+  const facilityTotal = normalizeFacilityList(property).reduce((sum, facility) => {
+    if (!facility.enabled || facility.includedInRent) return sum;
+    return sum + facility.price;
+  }, 0);
+  const foodTotal = normalizeFoodDetails(property).reduce((sum, item) => {
+    if (!item.enabled || item.includedInRent) return sum;
+    return sum + item.price;
+  }, 0);
+  return baseRent + facilityTotal + foodTotal;
+}
+
 function formatRating(property) {
   if (typeof property.rating !== "number") return "No rating yet";
   const reviews = typeof property.reviewCount === "number"
@@ -147,11 +189,14 @@ export default function PropertyDetailsPage() {
 
   const images = property?.images?.filter((image) => typeof image === "string" && image.trim()) || [];
   const verified = property?.verificationStatus === "verified" && property?.status === "active";
+  const facilityList = normalizeFacilityList(property);
+  const foodList = normalizeFoodDetails(property);
+  const maxMonthlyCost = calculatePropertyTotal(property);
 
   return (
     <div>
       <Navbar />
-      <main className="search-page">
+      <main className="search-page property-details-page">
         <div className="search-wrap">
           <button type="button" onClick={() => navigate(-1)} className="text-sm text-slate mb-5">
             ← Back to Find PG
@@ -169,16 +214,16 @@ export default function PropertyDetailsPage() {
           )}
 
           {!loading && !error && property && (
-            <article>
-              <header className="mb-6">
+            <article className="property-details-shell">
+              <header className="property-hero mb-6">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-3xl font-semibold">{property.name}</h1>
+                  <h1 className="property-title text-3xl font-semibold">{property.name}</h1>
                   {verified && <span className="badge">Verified</span>}
                 </div>
-                <p className="text-slate mt-2">{formatRating(property)} · {property.location || "Location unavailable"}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <p className="property-kicker text-slate mt-2">{formatRating(property)} <span>•</span> {property.location || "Location unavailable"}</p>
+                <div className="property-actions mt-4 flex flex-wrap gap-2">
                   <button type="button" onClick={() => { if (!isAuthenticated) return navigate("/login", { state: { from: `/property/${id}` } }); setActionType("inquiry"); setActionMessage(""); }} className="btn-primary">Send Inquiry</button>
-                  <button type="button" disabled={!(property.totalRooms > 0 && property.availableRooms > 0)} onClick={() => { if (!isAuthenticated) return navigate("/login", { state: { from: `/property/${id}` } }); setActionType("booking"); setActionMessage(""); }} className="btn-clear-danger disabled:opacity-50">{property.totalRooms > 0 && property.availableRooms > 0 ? "Request Booking" : "Availability unavailable"}</button>
+                  <button type="button" disabled={!(property.totalRooms > 0 && property.availableRooms > 0)} onClick={() => { if (!isAuthenticated) return navigate("/login", { state: { from: { pathname: `/checkout/${id}` } } }); navigate(`/checkout/${id}`); }} className="btn-primary disabled:opacity-50">{property.totalRooms > 0 && property.availableRooms > 0 ? "Book Now" : "Availability unavailable"}</button>
                 </div>
                 {actionMessage && !actionType && <p className="mt-3 text-sm text-teal-700" role="status">{actionMessage}</p>}
                 {actionType && <form onSubmit={submitPropertyAction} className="mt-4 max-w-xl rounded-lg border border-primary/10 bg-white p-4">
@@ -190,13 +235,13 @@ export default function PropertyDetailsPage() {
                 </form>}
               </header>
 
-              <section className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div className="lg:col-span-3">
+              <section className="property-overview grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="property-gallery lg:col-span-3">
                   {images.length ? (
-                    <div>
-                      <img src={images[selectedImage]} alt={`${property.name} ${selectedImage + 1}`} className="w-full rounded-lg border object-cover" style={{ maxHeight: "440px" }} />
+                    <div className="property-main-image-wrap">
+                      <img src={images[selectedImage]} alt={`${property.name} ${selectedImage + 1}`} className="property-main-image w-full rounded-lg border object-cover" style={{ maxHeight: "440px" }} />
                       {images.length > 1 && (
-                        <div className="flex gap-2 mt-3 overflow-x-auto" aria-label="Property images">
+                        <div className="property-thumbnails flex gap-2 mt-3 overflow-x-auto" aria-label="Property images">
                           {images.map((image, index) => (
                             <button key={image} type="button" onClick={() => setSelectedImage(index)} aria-label={`View image ${index + 1}`} className={`shrink-0 border rounded ${selectedImage === index ? "ring-2 ring-amber-500" : ""}`}>
                               <img src={image} alt="" className="w-20 h-16 object-cover rounded" />
@@ -206,12 +251,13 @@ export default function PropertyDetailsPage() {
                       )}
                     </div>
                   ) : (
-                    <div className="w-full rounded-lg border bg-gray-100 flex items-center justify-center text-sm text-slate" style={{ minHeight: "280px" }} role="img" aria-label="Property image unavailable">Image unavailable</div>
+                    <div className="property-image-empty w-full rounded-lg border flex items-center justify-center text-sm text-slate" style={{ minHeight: "280px" }} role="img" aria-label="Property image unavailable">Image unavailable</div>
                   )}
                 </div>
 
-                <div className="lg:col-span-2 filter-panel">
-                  <p className="text-2xl font-bold">{formatRent(property)}</p>
+                <div className="property-summary-card lg:col-span-2 filter-panel">
+                  <span className="property-summary-label">Starting from</span>
+                  <p className="property-price text-2xl font-bold">{formatRent(property)}</p>
                   <dl className="mt-5 space-y-3 text-sm">
                     <div><dt className="font-semibold">Room type</dt><dd className="text-slate">{roomLabels[property.roomType] || "Room type unavailable"}</dd></div>
                     <div><dt className="font-semibold">Rooms</dt><dd className="text-slate">{typeof property.totalRooms === "number" && property.totalRooms > 0 ? `${property.availableRooms ?? "Availability unavailable"} of ${property.totalRooms} available` : "Availability unavailable"}</dd></div>
@@ -221,8 +267,8 @@ export default function PropertyDetailsPage() {
                 </div>
               </section>
 
-              <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+              <section className="property-info-grid mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="property-info-card">
                   <h2 className="text-xl font-semibold">Location</h2>
                   <dl className="mt-3 space-y-2 text-sm text-slate">
                     <div><dt className="font-semibold text-[var(--ink)]">City</dt><dd>{property.city || "City unavailable"}</dd></div>
@@ -231,24 +277,34 @@ export default function PropertyDetailsPage() {
                     <div><dt className="font-semibold text-[var(--ink)]">Nearby college</dt><dd>{property.college || "College unavailable"}</dd></div>
                   </dl>
                 </div>
-                <div>
+                <div className="property-info-card">
                   <h2 className="text-xl font-semibold">Description</h2>
                   <p className="mt-3 text-sm text-slate">{property.description || "No description available."}</p>
                 </div>
               </section>
 
-              <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+              <section className="property-info-grid mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="property-info-card property-amenities-card">
                   <h2 className="text-xl font-semibold">Facilities</h2>
-                  {property.facilities?.length ? <div className="flex flex-wrap gap-2 mt-3">{property.facilities.map((facility) => <span key={facility} className="badge">{facility}</span>)}</div> : <p className="mt-3 text-sm text-slate">Facilities information unavailable.</p>}
+                  {facilityList.length ? <ul className="property-amenity-list mt-3">{facilityList.map((facility) => <li key={facility.name}><span className="property-amenity-name"><span className="property-check">✓</span>{facility.name}</span><span className="property-amenity-price">{facility.includedInRent ? "Included" : `+₹${facility.price.toLocaleString("en-IN")}/month`}</span></li>)}</ul> : <p className="mt-3 text-sm text-slate">Facilities information unavailable.</p>}
                 </div>
-                <div>
+                <div className="property-info-card property-amenities-card">
                   <h2 className="text-xl font-semibold">Food</h2>
-                  {property.foodIncluded || property.food?.length ? <div className="flex flex-wrap gap-2 mt-3">{property.foodIncluded && <span className="badge">Food included</span>}{property.food?.map((item) => <span key={item} className="badge">{item}</span>)}</div> : <p className="mt-3 text-sm text-slate">Food information unavailable.</p>}
+                  {foodList.length || property.foodIncluded || property.food?.enabled ? <ul className="property-amenity-list mt-3">{property.foodIncluded || property.food?.enabled ? <li><span className="property-amenity-name"><span className="property-check">✓</span>Food included</span><span className="property-amenity-price">Included</span></li> : null}{foodList.map((item) => <li key={item.name}><span className="property-amenity-name"><span className="property-check">✓</span>{item.name}</span><span className="property-amenity-price">{item.includedInRent ? "Included" : `+₹${item.price.toLocaleString("en-IN")}/month`}</span></li>)}</ul> : <p className="mt-3 text-sm text-slate">Food information unavailable.</p>}
                 </div>
               </section>
 
-              <section className="mt-8">
+              <section className="property-rent-card mt-8 rounded-xl border border-primary/10 bg-white p-4">
+                <h2 className="text-xl font-semibold">Monthly Rent Summary</h2>
+                <div className="mt-3 space-y-2 text-sm text-slate">
+                  <div className="flex items-center justify-between gap-3"><span>Monthly Rent</span><strong className="text-primary">₹{Number(property.monthlyRent || 0).toLocaleString("en-IN")}</strong></div>
+                  {facilityList.filter((item) => item.enabled && !item.includedInRent).map((item) => <div key={item.name} className="flex items-center justify-between gap-3"><span>{item.name}</span><span>+₹{Number(item.price || 0).toLocaleString("en-IN")}/month</span></div>)}
+                  {foodList.filter((item) => item.enabled && !item.includedInRent).map((item) => <div key={item.name} className="flex items-center justify-between gap-3"><span>{item.name}</span><span>+₹{Number(item.price || 0).toLocaleString("en-IN")}/month</span></div>)}
+                  <div className="flex items-center justify-between gap-3 border-t border-primary/10 pt-2 text-base font-semibold text-primary"><span>Maximum Monthly Cost</span><span>₹{Number(maxMonthlyCost || 0).toLocaleString("en-IN")}/month</span></div>
+                </div>
+              </section>
+
+              <section className="property-reviews mt-8">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-semibold">Reviews</h2>

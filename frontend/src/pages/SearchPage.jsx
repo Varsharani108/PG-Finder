@@ -19,6 +19,20 @@ import { getPublicProperties } from "../api/propertyApi.js";
 const PAGE_SIZE = 12;
 
 function normalizeProperty(property) {
+  const facilityNames = Array.isArray(property.facilities)
+    ? property.facilities
+        .map((item) => (typeof item === "string" ? item : item?.name))
+        .filter(Boolean)
+    : [];
+
+  const foodList = Array.isArray(property.foodOptions)
+    ? property.foodOptions
+    : Array.isArray(property.food)
+      ? property.food
+      : property.food && typeof property.food === "object"
+        ? ["breakfast", "lunch", "dinner"].filter((meal) => property.food[meal]?.enabled).map((meal) => meal)
+        : [];
+
   return {
     ...property,
     id: property._id,
@@ -26,8 +40,8 @@ function normalizeProperty(property) {
     area: property.area || property.location || "",
     rent: typeof property.monthlyRent === "number" ? property.monthlyRent : null,
     roomType: property.roomType || null,
-    facilities: Array.isArray(property.facilities) ? property.facilities : [],
-    food: Array.isArray(property.food) ? property.food : [],
+    facilities: facilityNames,
+    food: foodList,
     distance: typeof property.distanceFromCollege === "number" ? property.distanceFromCollege : null,
     latitude: typeof property.latitude === "number" ? property.latitude : null,
     longitude: typeof property.longitude === "number" ? property.longitude : null,

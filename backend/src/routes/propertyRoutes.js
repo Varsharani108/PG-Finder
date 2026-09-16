@@ -1,5 +1,5 @@
 import { Router } from "express";
-import Property from "../models/Property.js";
+import Property, { normalizeFacilities, normalizeFoodConfig, normalizePropertyPricingFields } from "../models/Property.js";
 import { authorize, protect, requireVerifiedOwner } from "../middleware/authMiddleware.js";
 import { createNotification } from "../utils/createNotification.js";
 
@@ -21,7 +21,9 @@ const publicFields = [
   "roomType",
   "genderPreference",
   "facilities",
+  "facilityNames",
   "food",
+  "foodOptions",
   "foodIncluded",
   "distanceFromCollege",
   "rating",
@@ -37,6 +39,25 @@ const roomTypes = new Set(["single", "double", "triple", "4+"]);
 const sortValues = new Set(["recommended", "lowest", "highest_rating", "nearest", "most_reviewed"]);
 const genderPreferences = new Set(["male", "female", "co-living"]);
 const foodOptions = new Set(["breakfast", "lunch", "dinner", "vegetarian", "non-vegetarian"]);
+
+function normalizePropertyInput(payload) {
+  const nextPayload = { ...payload };
+  if (Object.prototype.hasOwnProperty.call(nextPayload, "facilities")) {
+    nextPayload.facilities = normalizeFacilities(nextPayload.facilities);
+  }
+  if (Object.prototype.hasOwnProperty.call(nextPayload, "food")) {
+    nextPayload.food = normalizeFoodConfig(nextPayload.food, Boolean(nextPayload.foodIncluded));
+  } else if (Object.prototype.hasOwnProperty.call(nextPayload, "foodIncluded")) {
+    nextPayload.food = normalizeFoodConfig({}, Boolean(nextPayload.foodIncluded));
+  }
+  const pricing = normalizePropertyPricingFields(nextPayload);
+  nextPayload.facilities = pricing.facilities;
+  nextPayload.food = pricing.food;
+  nextPayload.facilityNames = pricing.facilityNames;
+  nextPayload.foodOptions = pricing.foodOptions;
+  nextPayload.foodIncluded = Boolean(nextPayload.food?.enabled || nextPayload.foodIncluded);
+  return nextPayload;
+}
 
 function validatePropertyPayload(payload, { partial = false } = {}) {
   const requiredFields = ["name", "city", "area", "location"];
@@ -72,8 +93,35 @@ function validatePropertyPayload(payload, { partial = false } = {}) {
   if (hasLatitude !== hasLongitude) throw Object.assign(new Error("Latitude and longitude must be provided together."), { statusCode: 400 });
   if (payload.latitude !== undefined && payload.latitude !== "" && (Number(payload.latitude) < -90 || Number(payload.latitude) > 90)) throw Object.assign(new Error("Latitude must be between -90 and 90."), { statusCode: 400 });
   if (payload.longitude !== undefined && payload.longitude !== "" && (Number(payload.longitude) < -180 || Number(payload.longitude) > 180)) throw Object.assign(new Error("Longitude must be between -180 and 180."), { statusCode: 400 });
-  if (payload.facilities !== undefined && (!Array.isArray(payload.facilities) || payload.facilities.some((value) => typeof value !== "string"))) throw Object.assign(new Error("Facilities must be an array of text values."), { statusCode: 400 });
-  if (payload.food !== undefined && (!Array.isArray(payload.food) || payload.food.some((value) => !foodOptions.has(value)))) throw Object.assign(new Error("Food options are invalid."), { statusCode: 400 });
+  if (payload.facilities !== undefined) {
+    if (!Array.isArray(payload.facilities)) throw Object.assign(new Error("Facilities must be an array."), { statusCode: 400 });
+    payload.facilities.forEach((facility) => {
+      if (typeof facility === "string") return;
+      if (facility && typeof facility === "object") {
+        if (typeof facility.name !== "string" || !facility.name.trim()) throw Object.assign(new Error("Each facility must include a name."), { statusCode: 400 });
+        if (!Number.isFinite(Number(facility.price)) || Number(facility.price) < 0) throw Object.assign(new Error(`${facility.name} price cannot be negative.`), { statusCode: 400 });
+        if (typeof facility.enabled !== "boolean" || typeof facility.includedInRent !== "boolean") throw Object.assign(new Error(`${facility.name} must specify enabled and includedInRent flags.`), { statusCode: 400 });
+        return;
+      }
+      throw Object.assign(new Error("Facilities must be strings or objects with pricing details."), { statusCode: 400 });
+    });
+  }
+
+  if (payload.food !== undefined) {
+    if (payload.food && typeof payload.food === "object" && !Array.isArray(payload.food)) {
+      for (const meal of ["breakfast", "lunch", "dinner"]) {
+        const item = payload.food[meal];
+        if (item !== undefined && item !== null && typeof item === "object") {
+          if (!Number.isFinite(Number(item.price)) || Number(item.price) < 0) throw Object.assign(new Error(`${meal} price cannot be negative.`), { statusCode: 400 });
+          if (typeof item.enabled !== "boolean" || typeof item.includedInRent !== "boolean") throw Object.assign(new Error(`${meal} must specify enabled and includedInRent flags.`), { statusCode: 400 });
+        }
+      }
+      if (payload.food.type && !["Vegetarian", "Non-vegetarian"].includes(payload.food.type)) throw Object.assign(new Error("Food type is invalid."), { statusCode: 400 });
+    } else if (payload.food !== undefined && !Array.isArray(payload.food)) {
+      throw Object.assign(new Error("Food must be an object with pricing details."), { statusCode: 400 });
+    }
+  }
+
   if (payload.images !== undefined && (!Array.isArray(payload.images) || payload.images.some((value) => typeof value !== "string" || (value && !/^https?:\/\//i.test(value))))) throw Object.assign(new Error("Images must contain valid URLs."), { statusCode: 400 });
 }
 
@@ -148,9 +196,9 @@ function publicSearchPipeline(query) {
     if (maxPrice !== undefined) filter.monthlyRent.$lte = maxPrice;
   }
   if (roomType) filter.roomType = roomType;
-  if (facilities.length) filter.facilities = { $all: facilities };
-  if (food.length) filter.food = { $all: food };
-  if (foodIncluded !== undefined) filter.foodIncluded = foodIncluded;
+  if (facilities.length) filter.facilityNames = { $all: facilities };
+  if (food.length) filter.foodOptions = { $all: food };
+  if (foodIncluded !== undefined) filter["food.enabled"] = foodIncluded;
   if (distance !== undefined) filter.distanceFromCollege = { $exists: true, $lte: distance };
   if (minRating !== undefined) filter.rating = { $exists: true, $gte: minRating };
   if (minReviewCount !== undefined) filter.reviewCount = { $exists: true, $gte: minReviewCount };
@@ -179,7 +227,6 @@ router.get("/public", async (req, res) => {
     if (page < 1 || limit < 1 || limit > 100) {
       return res.status(400).json({ message: "page must be at least 1 and limit must be between 1 and 100." });
     }
-   const foodOptions = new Set(["breakfast", "lunch", "dinner", "vegetarian", "non-vegetarian"]);
     const minPrice = parseNumber(req.query.minPrice, "minPrice");
     const maxPrice = parseNumber(req.query.maxPrice, "maxPrice");
     if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice) {
@@ -263,7 +310,8 @@ router.get("/", async (req, res) => {
 
 router.post("/", requireVerifiedOwner, async (req, res) => {
   try {
-    validatePropertyPayload(req.body);
+    const normalizedBody = normalizePropertyInput(req.body);
+    validatePropertyPayload(normalizedBody);
     const {
       name,
       location,
@@ -287,7 +335,7 @@ router.post("/", requireVerifiedOwner, async (req, res) => {
       availableRooms,
       totalRooms,
       images,
-    } = req.body;
+    } = normalizedBody;
     const property = await Property.create({
       owner: req.user._id,
       name,
@@ -324,7 +372,8 @@ router.post("/", requireVerifiedOwner, async (req, res) => {
 
 router.put("/:id", requireVerifiedOwner, async (req, res) => {
   try {
-    validatePropertyPayload(req.body, { partial: true });
+    const normalizedPayload = normalizePropertyInput(req.body);
+    validatePropertyPayload(normalizedPayload, { partial: true });
     const editableFields = [
       "name",
       "location",
@@ -351,8 +400,8 @@ router.put("/:id", requireVerifiedOwner, async (req, res) => {
     ];
     const propertyData = Object.fromEntries(
       editableFields
-        .filter((field) => Object.prototype.hasOwnProperty.call(req.body, field))
-        .map((field) => [field, req.body[field]])
+        .filter((field) => Object.prototype.hasOwnProperty.call(normalizedPayload, field))
+        .map((field) => [field, normalizedPayload[field]])
     );
     const property = await Property.findOne({ _id: req.params.id, owner: req.user._id });
     if (!property) return res.status(404).json({ message: "Property not found" });
