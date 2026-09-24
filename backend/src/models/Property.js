@@ -122,7 +122,7 @@ export const normalizePropertyPricingFields = (property = {}) => {
 };
 
 export function calculatePropertyTotal(property = {}) {
-  const baseRent = toNonNegativeNumber(property.monthlyRent, 0);
+  const baseRent = getRoomTypeRent(property);
   const facilities = normalizeFacilities(Array.isArray(property.facilities) ? property.facilities : []);
   const food = normalizeFoodConfig(property.food, Boolean(property.foodIncluded || property.food?.enabled));
 
@@ -140,13 +140,20 @@ export function calculatePropertyTotal(property = {}) {
   return baseRent + facilityTotal + foodTotal;
 }
 
-export function calculatePricingBreakdown(property = {}) {
-  const baseRent = toNonNegativeNumber(property.monthlyRent, 0);
+export function getRoomTypeRent(property = {}, roomType) {
+  const pricing = property.roomTypePricing;
+  const storedPrice = roomType && (typeof pricing?.get === "function" ? pricing.get(roomType) : pricing?.[roomType]);
+  return toNonNegativeNumber(storedPrice ?? property.monthlyRent, 0);
+}
+
+export function calculatePricingBreakdown(property = {}, roomType, selectedFacilityNames) {
+  const baseRent = getRoomTypeRent(property, roomType);
   const facilities = normalizeFacilities(Array.isArray(property.facilities) ? property.facilities : []);
   const food = normalizeFoodConfig(property.food, Boolean(property.foodIncluded || property.food?.enabled));
+  const selectedFacilities = Array.isArray(selectedFacilityNames) ? new Set(selectedFacilityNames) : null;
 
   const facilityBreakdown = facilities
-    .filter((facility) => facility.enabled)
+    .filter((facility) => facility.enabled && (facility.includedInRent || !selectedFacilities || selectedFacilities.has(facility.name)))
     .map((facility) => ({
       name: facility.name,
       includedInRent: Boolean(facility.includedInRent),
@@ -246,6 +253,11 @@ const propertySchema = new mongoose.Schema(
       type: Number,
       min: 0,
     },
+    roomTypePricing: {
+      type: Map,
+      of: { type: Number, min: 0 },
+      default: {},
+    },
     description: {
       type: String,
       trim: true,
@@ -271,13 +283,14 @@ const propertySchema = new mongoose.Schema(
       default: "",
     },
     roomType: {
-      type: String,
+      type: [String],
       enum: ["single", "double", "triple", "4+"],
+      default: [],
     },
     genderPreference: {
-      type: String,
+      type: [String],
       enum: ["male", "female", "co-living"],
-      default: "co-living",
+      default: ["co-living"],
     },
     facilities: {
       type: [facilityPriceSchema],

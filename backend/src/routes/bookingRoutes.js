@@ -1,11 +1,13 @@
 import { Router } from "express";
 import Booking from "../models/Booking.js";
-import Property, { calculatePricingBreakdown } from "../models/Property.js";
+import Property, { calculatePricingBreakdown, normalizeFacilities } from "../models/Property.js";
+import User from "../models/User.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
 import { createNotification } from "../utils/createNotification.js";
 
 const router = Router();
 const roomLabels = { single: "Single Sharing", double: "Double Sharing", triple: "Triple Sharing", "4+": "4+ Sharing" };
+const genderLabels = { male: "Male", female: "Female" };
 let Stripe;
 try {
   ({ default: Stripe } = await import("stripe"));
@@ -15,13 +17,27 @@ try {
 const stripe = process.env.STRIPE_SECRET_KEY && Stripe ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 function validateBookingInput(body, property) {
-  const roomType = body.roomType || property.roomType;
-  if (!roomType || roomType !== property.roomType) throw Object.assign(new Error("Please select a valid room type."), { statusCode: 400 });
+  const availableRoomTypes = Array.isArray(property.roomType) ? property.roomType : property.roomType ? [property.roomType] : [];
+  const roomType = body.roomType || availableRoomTypes[0];
+  if (!roomType || !availableRoomTypes.includes(roomType)) throw Object.assign(new Error("Please select a valid room type."), { statusCode: 400 });
   if (body.moveInDate && (Number.isNaN(new Date(body.moveInDate).getTime()) || new Date(body.moveInDate) < new Date(new Date().setHours(0, 0, 0, 0)))) throw Object.assign(new Error("Move-in date must be today or a future date."), { statusCode: 400 });
-  const occupants = Number(body.occupants || 1);
   const maxOccupants = roomType === "single" ? 1 : roomType === "double" ? 2 : roomType === "triple" ? 3 : 4;
-  if (!Number.isInteger(occupants) || occupants < 1 || occupants > maxOccupants) throw Object.assign(new Error(`Occupants must be between 1 and ${maxOccupants}.`), { statusCode: 400 });
-  return { roomType, occupants };
+  const ownerPreferences = Array.isArray(property.genderPreference) ? property.genderPreference : property.genderPreference ? [property.genderPreference] : [];
+  const allowedGenders = new Set(ownerPreferences.includes("co-living") ? ["male", "female"] : ownerPreferences.filter((gender) => genderLabels[gender]));
+  const genderCounts = body.occupantGenderCounts && typeof body.occupantGenderCounts === "object" ? body.occupantGenderCounts : {};
+  const occupantGenderCounts = Object.fromEntries([...allowedGenders].map((gender) => [gender, Number(genderCounts[gender] || 0)]));
+  if (!allowedGenders.size) throw Object.assign(new Error("This property has no valid gender preference configured."), { statusCode: 400 });
+  if (Object.values(occupantGenderCounts).some((count) => !Number.isInteger(count) || count < 0)) throw Object.assign(new Error("Occupant counts must be whole numbers."), { statusCode: 400 });
+  const occupants = Object.values(occupantGenderCounts).reduce((total, count) => total + count, 0);
+  if (occupants < 1 || occupants > maxOccupants) throw Object.assign(new Error(`Total occupants must be between 1 and ${maxOccupants}.`), { statusCode: 400 });
+  const availableFacilities = new Set(normalizeFacilities(property.facilities).filter((facility) => facility.enabled && !facility.includedInRent).map((facility) => facility.name));
+  const selectedFacilities = body.selectedFacilities === undefined
+    ? [...availableFacilities]
+    : Array.isArray(body.selectedFacilities)
+      ? [...new Set(body.selectedFacilities)]
+      : null;
+  if (!selectedFacilities || selectedFacilities.some((name) => !availableFacilities.has(name))) throw Object.assign(new Error("Please select valid facilities."), { statusCode: 400 });
+  return { roomType, occupants, occupantGenderCounts, selectedFacilities };
 }
 
 async function getActiveProperty(propertyId) {
@@ -73,6 +89,7 @@ function buildBookingData(property, userId, input, breakdown, paymentMethod) {
     tenant: userId,
     roomType: input.roomType,
     roomLabel: roomLabels[input.roomType],
+    occupantGenderCounts: input.occupantGenderCounts,
     moveInDate: input.moveInDate || undefined,
     rent: breakdown.baseRent,
     amount: breakdown.total,
@@ -92,7 +109,10 @@ router.get("/checkout/:propertyId", async (req, res) => {
   try {
     const property = await getActiveProperty(req.params.propertyId);
     if (!(property.availableRooms > 0)) return res.status(409).json({ message: "No rooms are currently available." });
-    res.json({ property, pricing: calculatePricingBreakdown(property), room: { type: property.roomType, label: roomLabels[property.roomType], available: property.availableRooms, total: property.totalRooms } });
+    const roomTypes = Array.isArray(property.roomType) ? property.roomType : property.roomType ? [property.roomType] : [];
+    const selectedRoomType = req.query.roomType && roomTypes.includes(req.query.roomType) ? req.query.roomType : roomTypes[0];
+    const owner = await User.findById(property.owner).select("name phone email").lean();
+    res.json({ property, owner, pricing: calculatePricingBreakdown(property, selectedRoomType), room: { type: selectedRoomType, types: roomTypes, label: roomLabels[selectedRoomType], available: property.availableRooms, total: property.totalRooms } });
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message || "Could not load checkout details." });
   }
@@ -114,7 +134,7 @@ router.post("/cash", async (req, res) => {
     const property = await getActiveProperty(req.body.property);
     const input = validateBookingInput(req.body, property);
     await rejectDuplicate(property._id, req.user._id);
-    const breakdown = calculatePricingBreakdown(property);
+    const breakdown = calculatePricingBreakdown(property, input.roomType, input.selectedFacilities);
     const reservedProperty = await Property.findOneAndUpdate({ _id: property._id, availableRooms: { $gte: 1 } }, { $inc: { availableRooms: -1 } }, { new: true });
     if (!reservedProperty) return res.status(409).json({ message: "This room was just booked. Please choose another property." });
     const booking = await Booking.create({ ...buildBookingData(property, req.user._id, { ...req.body, ...input }, breakdown, "cash"), availabilityReserved: true });
@@ -132,7 +152,7 @@ router.post("/stripe-session", async (req, res) => {
     const property = await getActiveProperty(req.body.property);
     const input = validateBookingInput(req.body, property);
     await rejectDuplicate(property._id, req.user._id);
-    const breakdown = calculatePricingBreakdown(property);
+    const breakdown = calculatePricingBreakdown(property, input.roomType, input.selectedFacilities);
     const booking = await Booking.create(buildBookingData(property, req.user._id, { ...req.body, ...input }, breakdown, "stripe"));
     const session = await stripe.checkout.sessions.create({
       mode: "payment",

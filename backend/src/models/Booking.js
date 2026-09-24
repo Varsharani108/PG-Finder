@@ -8,6 +8,7 @@ const bookingSchema = new mongoose.Schema(
     tenant: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     roomType: { type: String, trim: true, default: "" },
     roomLabel: { type: String, trim: true, default: "" },
+    occupantGenderCounts: { type: mongoose.Schema.Types.Mixed, default: {} },
     moveInDate: { type: Date },
     rent: { type: Number, min: 0, default: 0 },
     bookingDate: { type: Date, default: Date.now },

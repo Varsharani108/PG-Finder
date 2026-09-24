@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 export default function PGCard({ pg, onShowOnMap }) {
-  const rentLabel = pg.rent !== null ? `₹${pg.rent}` : pg.price || "Rent unavailable";
+  const rentLabel = pg.rent !== null ? ` Lowest ₹${pg.rent}` : pg.price || "Rent unavailable";
   const ratingLabel = pg.rating !== null ? `⭐ ${pg.rating.toFixed(1)}` : "No rating yet";
   const distanceLabel = pg.distance !== null ? `${pg.distance} m` : "Distance unavailable";
 
@@ -29,17 +29,23 @@ export default function PGCard({ pg, onShowOnMap }) {
 
         <div className="mt-3 text-sm space-y-1">
           <div className="flex flex-wrap gap-2">
-            {pg.roomType && <span className="badge">{pg.roomType} sharing</span>}
+            {pg.roomType && <span className="badge">{pg.roomType}  sharing</span>}
             {pg.facilities.slice(0,3).map((f) => (
               <span key={f} className="badge" style={{ background: 'rgba(0,0,0,0.04)', color: 'var(--ink)'}}>{f}</span>
             ))}
           </div>
 
+<div className="flex flex-wrap gap-2">
+            {pg.genderPreference && <span className="badge">{pg.genderPreference}  sharing</span>}
+            
+          </div>
           <div className="text-slate text-sm">Food: {Array.isArray(pg.food) && pg.food.length ? pg.food.join(", ") : "Food information unavailable"}</div>
           <div className="text-slate text-sm">Distance: {distanceLabel}</div>
           {pg.reviewCount !== null && <div className="text-slate text-sm">{pg.reviewCount} review{pg.reviewCount === 1 ? "" : "s"}</div>}
           {typeof pg.availableRooms === "number" && typeof pg.totalRooms === "number" && pg.totalRooms > 0 && <div className="text-slate text-sm">{pg.availableRooms} of {pg.totalRooms} rooms available</div>}
         </div>
+
+
 
         <div className="mt-4 flex items-center justify-between gap-2">
           <div className="text-sm muted">{pg.college || "College unavailable"}</div>

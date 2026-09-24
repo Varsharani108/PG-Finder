@@ -18,7 +18,7 @@ const facilityNames = [
   "Garden", "Balcony",
 ];
 const emptyFacilities = () => facilityNames.map((name) => ({ name, enabled: false, includedInRent: false, price: 0 }));
-const emptyForm = { name: "", description: "", city: "", area: "", location: "", college: "", monthlyRent: "", price: "", totalRooms: "", availableRooms: "", roomType: "", genderPreference: "co-living", facilities: emptyFacilities(), food: emptyFoodConfig(), foodIncluded: false, distanceFromCollege: "", images: [] };
+const emptyForm = { name: "", description: "", city: "", area: "", location: "", college: "", monthlyRent: "", price: "", totalRooms: "", availableRooms: "", roomType: [], genderPreference: ["co-living"], roomTypePricing: { single: "", double: "", triple: "", "4+": "" }, facilities: emptyFacilities(), food: emptyFoodConfig(), foodIncluded: false, distanceFromCollege: "", images: [] };
 
 const normalizeFacilitiesForForm = (value) => {
   const facilities = Array.isArray(value) ? value : [];
@@ -56,6 +56,13 @@ const normalizeFoodForForm = (value) => {
 };
 
 const serializePropertyPayload = (form) => {
+  const selectedRoomTypes = Array.isArray(form.roomType) ? form.roomType : form.roomType ? [form.roomType] : [];
+  const roomTypePricing = form.roomTypePricing || {};
+  const chosenRent = selectedRoomTypes.reduce((best, roomType) => {
+    const candidate = Number(roomTypePricing[roomType] ?? form.monthlyRent ?? "");
+    if (!Number.isFinite(candidate) || candidate <= 0) return best;
+    return best === null || candidate < best ? candidate : best;
+  }, null) ?? Number(form.monthlyRent ?? 0);
   const facilities = (form.facilities || []).map((facility) => ({
     name: facility.name,
     enabled: Boolean(facility.enabled),
@@ -83,10 +90,13 @@ const serializePropertyPayload = (form) => {
   };
   return {
     ...form,
+    roomType: selectedRoomTypes,
+    roomTypePricing,
+    monthlyRent: chosenRent,
     facilities,
     food,
     foodIncluded: Boolean(food.enabled),
-    price: form.price || String(form.monthlyRent),
+    price: form.price || String(chosenRent),
   };
 };
 
@@ -194,26 +204,37 @@ export default function OwnerDashboard() {
   const openEdit = (property) => { 
     const facilities = normalizeFacilitiesForForm(property.facilities);
     const food = normalizeFoodForForm(property.food || { enabled: Boolean(property.foodIncluded) });
+    const roomTypeValues = Array.isArray(property.roomType) ? property.roomType : property.roomType ? [property.roomType] : [];
+    const roomTypePricing = { single: "", double: "", triple: "", "4+": "" };
+    roomTypeValues.forEach((roomType) => {
+      if (roomType) roomTypePricing[roomType] = property.monthlyRent ?? "";
+    });
     setEditingId(property._id);
-    setForm({ ...emptyForm, ...property, city: property.city || "", area: property.area || "", college: property.college || "", monthlyRent: property.monthlyRent ?? "", price: property.price || "", totalRooms: property.totalRooms || property.rooms || "", availableRooms: property.availableRooms ?? "", roomType: property.roomType || "", genderPreference: property.genderPreference || "co-living", facilities, food, foodIncluded: Boolean(property.foodIncluded || food.enabled), distanceFromCollege: property.distanceFromCollege ?? "", images: Array.isArray(property.images) ? property.images : [] });
+    setForm({ ...emptyForm, ...property, city: property.city || "", area: property.area || "", college: property.college || "", monthlyRent: property.monthlyRent ?? "", price: property.price || "", totalRooms: property.totalRooms || property.rooms || "", availableRooms: property.availableRooms ?? "", roomType: roomTypeValues, roomTypePricing, genderPreference: Array.isArray(property.genderPreference) ? property.genderPreference : (property.genderPreference ? [property.genderPreference] : ["co-living"]), facilities, food, foodIncluded: Boolean(property.foodIncluded || food.enabled), distanceFromCollege: property.distanceFromCollege ?? "", images: Array.isArray(property.images) ? property.images : [] });
     setFormOpen(true); setTab("properties");
   };
   const saveProperty = async (event) => {
     event.preventDefault();
     const totalRooms = Number(form.totalRooms);
     const availableRooms = Number(form.availableRooms);
-    const monthlyRent = Number(form.monthlyRent);
+    const selectedRoomTypes = Array.isArray(form.roomType) ? form.roomType : form.roomType ? [form.roomType] : [];
+    const roomTypePricing = form.roomTypePricing || {};
+    const monthlyRent = selectedRoomTypes.reduce((best, roomType) => {
+      const candidate = Number(roomTypePricing[roomType] ?? form.monthlyRent ?? "");
+      if (!Number.isFinite(candidate) || candidate <= 0) return best;
+      return best === null || candidate < best ? candidate : best;
+    }, null) ?? Number(form.monthlyRent ?? 0);
     if (!form.name.trim() || !form.city.trim() || !form.area.trim() || !form.location.trim()) return showNotice("Name, city, area, and location are required.", "error");
     if (!Number.isFinite(monthlyRent) || monthlyRent <= 0) return showNotice("Monthly rent must be greater than 0.", "error");
     if (!Number.isInteger(totalRooms) || totalRooms <= 0) return showNotice("Total rooms must be a positive whole number.", "error");
     if (!Number.isInteger(availableRooms) || availableRooms < 0 || availableRooms > totalRooms) return showNotice("Available rooms cannot exceed total rooms.", "error");
-    if (!form.roomType) return showNotice("Please select a room type.", "error");
+    if (!selectedRoomTypes.length) return showNotice("Please select a room type.", "error");
     const prices = (form.facilities || []).filter((facility) => facility.enabled && !facility.includedInRent).map((facility) => Number(facility.price) || 0);
     const foodPrices = ["breakfast", "lunch", "dinner"].filter((meal) => form.food?.[meal]?.enabled && !form.food?.[meal]?.includedInRent).map((meal) => Number(form.food?.[meal]?.price) || 0);
     if (prices.some((price) => price < 0) || foodPrices.some((price) => price < 0)) return showNotice("Additional charges cannot be negative.", "error");
     setSaving(true); setError("");
     try {
-      const payload = serializePropertyPayload({ ...form, rooms: totalRooms, totalRooms, availableRooms, monthlyRent, distanceFromCollege: form.distanceFromCollege === "" ? undefined : Number(form.distanceFromCollege) });
+      const payload = serializePropertyPayload({ ...form, rooms: totalRooms, totalRooms, availableRooms, monthlyRent, roomType: selectedRoomTypes, distanceFromCollege: form.distanceFromCollege === "" ? undefined : Number(form.distanceFromCollege) });
       if (editingId) await updateProperty(editingId, payload); else await createProperty(payload);
       await loadDashboard(); setForm(emptyForm); setEditingId(null); setFormOpen(false); showNotice(editingId ? "Property updated successfully." : "Property added successfully.");
     } catch (err) { setError(err.message); showNotice(err.message, "error"); } finally { setSaving(false); }

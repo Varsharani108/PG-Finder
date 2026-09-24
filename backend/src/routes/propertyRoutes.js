@@ -17,6 +17,7 @@ const publicFields = [
   "college",
   "price",
   "monthlyRent",
+  "roomTypePricing",
   "rooms",
   "roomType",
   "genderPreference",
@@ -42,6 +43,19 @@ const foodOptions = new Set(["breakfast", "lunch", "dinner", "vegetarian", "non-
 
 function normalizePropertyInput(payload) {
   const nextPayload = { ...payload };
+  for (const field of ["roomType", "genderPreference"]) {
+    if (Object.prototype.hasOwnProperty.call(nextPayload, field) && !Array.isArray(nextPayload[field])) {
+      nextPayload[field] = nextPayload[field] ? [nextPayload[field]] : [];
+    }
+  }
+  if (nextPayload.roomTypePricing && typeof nextPayload.roomTypePricing === "object" && !Array.isArray(nextPayload.roomTypePricing)) {
+    const selectedRoomTypes = Array.isArray(nextPayload.roomType) ? nextPayload.roomType : [];
+    nextPayload.roomTypePricing = Object.fromEntries(
+      Object.entries(nextPayload.roomTypePricing)
+        .filter(([type]) => selectedRoomTypes.includes(type))
+        .map(([type, price]) => [type, Number(price)])
+    );
+  }
   if (Object.prototype.hasOwnProperty.call(nextPayload, "facilities")) {
     nextPayload.facilities = normalizeFacilities(nextPayload.facilities);
   }
@@ -69,10 +83,16 @@ function validatePropertyPayload(payload, { partial = false } = {}) {
     if (!Number.isFinite(Number(payload.monthlyRent)) || Number(payload.monthlyRent) <= 0) throw Object.assign(new Error("Monthly rent must be greater than 0."), { statusCode: 400 });
     if (!Number.isInteger(Number(payload.totalRooms)) || Number(payload.totalRooms) <= 0) throw Object.assign(new Error("Total rooms must be a positive whole number."), { statusCode: 400 });
     if (!Number.isInteger(Number(payload.availableRooms)) || Number(payload.availableRooms) < 0) throw Object.assign(new Error("Available rooms must be a non-negative whole number."), { statusCode: 400 });
-    if (!payload.roomType) throw Object.assign(new Error("Room type is required."), { statusCode: 400 });
+    if (!Array.isArray(payload.roomType) || !payload.roomType.length) throw Object.assign(new Error("At least one room type is required."), { statusCode: 400 });
   }
   if (payload.monthlyRent !== undefined && (!Number.isFinite(Number(payload.monthlyRent)) || Number(payload.monthlyRent) <= 0)) {
     throw Object.assign(new Error("Monthly rent must be greater than 0."), { statusCode: 400 });
+  }
+  if (payload.roomTypePricing !== undefined) {
+    if (!payload.roomTypePricing || typeof payload.roomTypePricing !== "object" || Array.isArray(payload.roomTypePricing)) throw Object.assign(new Error("Room type pricing must be an object."), { statusCode: 400 });
+    Object.entries(payload.roomTypePricing).forEach(([type, price]) => {
+      if (!roomTypes.has(type) || !Number.isFinite(Number(price)) || Number(price) <= 0) throw Object.assign(new Error("Each selected room type must have a valid price."), { statusCode: 400 });
+    });
   }
   for (const field of ["rooms", "totalRooms", "availableRooms"]) {
     if (payload[field] !== undefined && (!Number.isInteger(Number(payload[field])) || Number(payload[field]) < 0 || (field === "rooms" && Number(payload[field]) < 1))) {
@@ -82,8 +102,11 @@ function validatePropertyPayload(payload, { partial = false } = {}) {
   if (payload.totalRooms !== undefined && payload.availableRooms !== undefined && Number(payload.availableRooms) > Number(payload.totalRooms)) {
     throw Object.assign(new Error("Available rooms cannot exceed total rooms."), { statusCode: 400 });
   }
-  if (payload.roomType !== undefined && !roomTypes.has(payload.roomType)) throw Object.assign(new Error("Invalid room type."), { statusCode: 400 });
-  if (payload.genderPreference !== undefined && !genderPreferences.has(payload.genderPreference)) throw Object.assign(new Error("Invalid gender preference."), { statusCode: 400 });
+  for (const [field, allowed, label] of [["roomType", roomTypes, "room type"], ["genderPreference", genderPreferences, "gender preference"]]) {
+    if (payload[field] !== undefined && (!Array.isArray(payload[field]) || !payload[field].length || payload[field].some((value) => !allowed.has(value)))) {
+      throw Object.assign(new Error(`Invalid ${label}.`), { statusCode: 400 });
+    }
+  }
   if (payload.distanceFromCollege !== undefined && payload.distanceFromCollege !== "" && (!Number.isFinite(Number(payload.distanceFromCollege)) || Number(payload.distanceFromCollege) < 0)) throw Object.assign(new Error("Distance must be a non-negative number."), { statusCode: 400 });
   for (const field of ["latitude", "longitude"]) {
     if (payload[field] !== undefined && payload[field] !== "" && !Number.isFinite(Number(payload[field]))) throw Object.assign(new Error(`${field} must be a valid number.`), { statusCode: 400 });
@@ -195,7 +218,7 @@ function publicSearchPipeline(query) {
     if (minPrice !== undefined) filter.monthlyRent.$gte = minPrice;
     if (maxPrice !== undefined) filter.monthlyRent.$lte = maxPrice;
   }
-  if (roomType) filter.roomType = roomType;
+  if (roomType) filter.roomType = { $in: [roomType] };
   if (facilities.length) filter.facilityNames = { $all: facilities };
   if (food.length) filter.foodOptions = { $all: food };
   if (foodIncluded !== undefined) filter["food.enabled"] = foodIncluded;
@@ -320,6 +343,7 @@ router.post("/", requireVerifiedOwner, async (req, res) => {
       rooms,
       price,
       monthlyRent,
+      roomTypePricing,
       description,
       city,
       area,
@@ -345,6 +369,7 @@ router.post("/", requireVerifiedOwner, async (req, res) => {
       rooms,
       price,
       monthlyRent,
+      roomTypePricing,
       description,
       city,
       area,
@@ -382,6 +407,7 @@ router.put("/:id", requireVerifiedOwner, async (req, res) => {
       "rooms",
       "price",
       "monthlyRent",
+      "roomTypePricing",
       "description",
       "city",
       "area",
