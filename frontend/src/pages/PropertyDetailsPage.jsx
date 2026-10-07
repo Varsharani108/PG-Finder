@@ -322,7 +322,7 @@ export default function PropertyDetailsPage() {
                 )}
               </header>
 
-              <div className="property-content-grid">
+              <div className="property-content-grid ">
                 <div className="property-main-column">
                   <section className="detail-section property-gallery-section">
                     {images.length ? (

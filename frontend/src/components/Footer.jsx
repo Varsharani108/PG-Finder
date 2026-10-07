@@ -1,108 +1,89 @@
 import { Link } from "react-router-dom";
-import { Mail, MapPin, Phone, Instagram, Facebook, Linkedin, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Mail, MapPin } from "lucide-react";
 
-const columns = [
-  {
-    title: "Explore",
-    links: [
-      ["Find a PG", "/search"],
-      ["Explore Areas", "/search"],
-      ["Tiffin services", "/about"],
-      ["Local services", "/about"],
-    ],
-  },
-  {
-    title: "For Owners",
-    links: [
-      ["List Your Property", "/signup?role=owner"],
-      ["Owner Dashboard", "/login"],
-      ["How it works", "/about"],
-      ["Help & support", "/about"],
-    ],
-  },
-  {
-    title: "Company",
-    links: [
-      ["About PG Finder", "/about"],
-      ["Contact us", "/about"],
-      ["Privacy policy", "/about"],
-      ["Terms of service", "/about"],
-    ],
-  },
+const serviceTags = [
+  "PG & hostel search",
+  "Room booking",
+  "Tiffin services",
+  "Nearby essentials",
 ];
+
+const linkClass =
+  "text-sm text-slate-300 transition-colors hover:text-[#f2a93b] focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2a93b]";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-[#16233f]/10 bg-[#16233f] text-white">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Main footer */}
-        <div className="grid gap-12 py-14 lg:grid-cols-[1.45fr_repeat(3,1fr)] lg:gap-14 lg:py-16">
-          <div className="max-w-sm">
-            <Link to="/" className="mb-5 inline-flex items-center gap-2.5" aria-label="PG Finder home">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f2a93b] text-[#16233f]">
-                <MapPin size={18} strokeWidth={2.5} />
+    <footer className="border-t border-white/10 bg-[#202124] text-white">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+        <div className="grid grid-cols-1 gap-9 py-10 sm:grid-cols-2 sm:gap-x-10 sm:gap-y-12 lg:grid-cols-[1.35fr_0.8fr_1.2fr_1.1fr] lg:gap-12 lg:py-12">
+          <section aria-labelledby="footer-brand-heading" className="max-w-sm">
+            <Link to="/" className="inline-flex items-center gap-2.5" aria-label="PG Finder home">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#f2a93b] text-[#16233f]">
+                <MapPin size={17} strokeWidth={2.2} aria-hidden="true" />
               </span>
-              <span className="text-lg font-bold tracking-tight">PG Finder<span className="text-[#f2a93b]">.</span></span>
+              <span id="footer-brand-heading" className="text-base font-semibold tracking-tight">
+                PG Finder
+              </span>
             </Link>
-            <p className="text-sm leading-6 text-slate-500">
-              Find a comfortable PG that fits your budget, location, and lifestyle, without the usual hassle.
+            <p className="mt-4 max-w-xs text-sm leading-6 text-slate-400">
+              Find a place to stay, book a room, and discover useful services for your new neighborhood.
             </p>
-            <div className="mt-6 space-y-3 text-sm text-slate-300">
-              <a href="mailto:hello@pgfinder.in" className="flex items-center gap-2 transition hover:text-[#f2a93b]"><Mail size={15} /> hello@pgfinder.in</a>
-              <a href="tel:+919876543210" className="flex items-center gap-2 transition hover:text-[#f2a93b]"><Phone size={15} /> +91 98765 43210</a>
-              <p className="flex items-center gap-2"><MapPin size={15} /> Pune, Maharashtra</p>
-            </div>
-            <div className="mt-7 flex items-center gap-2">
-              <a href="#" aria-label="Instagram" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-slate-300 transition hover:border-[#f2a93b] hover:text-[#f2a93b]">
-                <Instagram size={16} />
-              </a>
-              <a href="#" aria-label="Facebook" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-slate-300 transition hover:border-[#f2a93b] hover:text-[#f2a93b]">
-                <Facebook size={16} />
-              </a>
-              <a href="#" aria-label="LinkedIn" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-slate-300 transition hover:border-[#f2a93b] hover:text-[#f2a93b]">
-                <Linkedin size={16} />
-              </a>
-            </div>
-          </div>
+            <a
+              href="mailto:hello@pgfinder.in"
+              className={`${linkClass} mt-4 inline-flex items-center gap-2`}
+            >
+              <Mail size={15} className="text-[#f2a93b]" aria-hidden="true" />
+              hello@pgfinder.in
+            </a>
+          </section>
 
-          {columns.map((column) => (
-            <div key={column.title}>
-              <h3 className="mb-5 text-sm font-semibold text-white">{column.title}</h3>
-              <ul className="space-y-3">
-                {column.links.map(([label, href]) => (
-                  <li key={label}>
-                    <Link
-                      to={href}
-                      className="text-sm text-slate-300 transition hover:text-[#f2a93b]"
-                    >
-                      {label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <nav aria-label="Footer navigation">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-white">
+              Explore
+            </h2>
+            <ul className="mt-4 space-y-3">
+              <li><Link to="/search" className={linkClass}>Browse PGs</Link></li>
+              <li><Link to="/about" className={linkClass}>About PG Finder</Link></li>
+              <li><Link to="/signup?role=owner" className={linkClass}>List your property</Link></li>
+            </ul>
+          </nav>
+
+          <section aria-labelledby="footer-services-heading">
+            <h2 id="footer-services-heading" className="text-xs font-semibold uppercase tracking-[0.14em] text-white">
+              Our services
+            </h2>
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {serviceTags.map((tag) => (
+                <li
+                  key={tag}
+                  className="rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-slate-300"
+                >
+                  {tag}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section aria-labelledby="footer-owner-heading">
+            <h2 id="footer-owner-heading" className="text-xs font-semibold uppercase tracking-[0.14em] text-white">
+              For property owners
+            </h2>
+            <p className="mt-4 text-sm leading-6 text-slate-400">
+              Reach people looking for their next place to stay.
+            </p>
+            <Link
+              to="/signup?role=owner"
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-[#f2a93b] px-3.5 py-2.5 text-sm font-semibold text-[#16233f] transition-colors hover:bg-[#d98d1c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#202124]"
+            >
+              Create owner account
+              <ArrowUpRight size={15} aria-hidden="true" />
+            </Link>
+          </section>
         </div>
 
-        {/* CTA strip */}
-        <div className="mb-10 flex flex-col gap-5 rounded-2xl border border-white/10 bg-[#2a3a5c] px-6 py-7 text-white sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <div>
-            <p className="text-base font-semibold">Have a PG to list?</p>
-            <p className="mt-1 text-sm text-slate-300">Reach students and professionals looking for their next home.</p>
-          </div>
-          <Link
-            to="/signup?role=owner"
-            className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#f2a93b] px-4 py-2.5 text-sm font-bold text-[#16233f] transition hover:bg-[#d98d1c]"
-          >
-            List your property
-            <ArrowUpRight size={15} />
-          </Link>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="flex flex-col gap-3 border-t border-white/10 py-6 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-t border-white/10 py-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} PG Finder. All rights reserved.</p>
-          <p>Made for better stays in India.</p>
+          <p>Made for students and professionals.</p>
         </div>
       </div>
     </footer>

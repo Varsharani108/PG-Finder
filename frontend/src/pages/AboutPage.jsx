@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
+import Footer from "../components/Footer.jsx";
 import WhoWeAre from "../components/about/WhoWeAre.jsx";
 import Mission from "../components/about/Mission.jsx";
 import Offerings from "../components/about/Offerings.jsx";
@@ -39,9 +40,7 @@ export default function AboutPage() {
         <FAQ />
         <CTA />
       </main>
-      <footer className="footer">
-        © {new Date().getFullYear()} PG Finder. Built for students and professionals, everywhere.
-      </footer>
+      <Footer />
     </>
   );
 }
