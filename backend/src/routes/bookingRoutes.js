@@ -4,17 +4,13 @@ import Property, { calculatePricingBreakdown, normalizeFacilities } from "../mod
 import User from "../models/User.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
 import { createNotification } from "../utils/createNotification.js";
+import "../config/loadEnv.js";
+import Stripe from "stripe";
 
 const router = Router();
 const roomLabels = { single: "Single Sharing", double: "Double Sharing", triple: "Triple Sharing", "4+": "4+ Sharing" };
 const genderLabels = { male: "Male", female: "Female" };
-let Stripe;
-try {
-  ({ default: Stripe } = await import("stripe"));
-} catch {
-  Stripe = null;
-}
-const stripe = process.env.STRIPE_SECRET_KEY && Stripe ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 function validateBookingInput(body, property) {
   const availableRoomTypes = Array.isArray(property.roomType) ? property.roomType : property.roomType ? [property.roomType] : [];

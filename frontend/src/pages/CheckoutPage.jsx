@@ -57,13 +57,17 @@ export default function CheckoutPage() {
     try {
       if (form.paymentMethod === "stripe") {
         const result = await createStripeSession(payload);
+        if (!result?.checkoutUrl) {
+          throw new Error("Stripe checkout could not be started. Please try again.");
+        }
         window.location.assign(result.checkoutUrl);
-      } else {
-        const result = await createCashBooking(payload);
-        navigate(`/booking-confirmation/${result.booking._id}`);
+        return;
       }
+
+      const result = await createCashBooking(payload);
+      navigate(`/booking-confirmation/${result.booking._id}`);
     } catch (requestError) {
-      setError(requestError.message);
+      setError(requestError.message || "Something went wrong while processing your booking.");
       setSaving(false);
     }
   };
